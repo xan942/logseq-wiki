@@ -1,101 +1,84 @@
 # Wiki Schema
 
-This document defines the structure of the wiki, ingest rules, and lint rules.
-Claude reads this on every Ingest and Lint operation.
+Claude reads this file on every Ingest and Lint operation.
+Edit this file to change how the wiki is structured and what rules Claude enforces.
 
 ---
 
 ## Wiki Structure
 
+The `wiki/` directory is Logseq's pages directory (configured in `logseq/config.edn`).
+Subdirectories appear as **namespaced pages** in Logseq's graph view.
+
 ```
 wiki/
-├── index.md          # Auto-maintained table of contents + cross-reference map
-├── hardware/         # Physical devices, specs, interfaces, connectivity
-├── services/         # Running services, ports, config paths, health status
-├── configs/          # Canonical configuration snippets (source of truth)
-└── issues/           # Known problems, workarounds, resolution status
+├── index.md          # Auto-maintained table of contents — Claude keeps this updated
+├── hardware/         # Physical devices: specs, roles, interfaces, connectivity
+├── services/         # Running services: ports, config paths, dependencies, health
+├── configs/          # Canonical config snippets — the authoritative version of each config
+└── issues/           # Known problems: status (OPEN / RESOLVED / WONT-FIX), workarounds
 ```
 
-### Page Categories
-
-| Category | What goes here | Example pages |
-|---|---|---|
-| `hardware/` | Physical device specs, interfaces, roles | `raspberry-pi-4.md`, `router.md` |
-| `services/` | Service name, port, config path, dependencies, last-verified date | `nginx.md`, `nextcloud.md` |
-| `configs/` | Canonical config blocks — the authoritative version | `nginx-ssl.md`, `pihole-custom-dns.md` |
-| `issues/` | Problems with status: OPEN / RESOLVED / WONT-FIX | `ssl-cert-renewal.md` |
+Adapt these categories to your use case. The schema is the only file you need to edit
+to change how Claude organizes knowledge.
 
 ---
 
 ## Page Format
 
-Every wiki page must have this frontmatter:
+Every wiki page must include this frontmatter block at the top:
 
 ```markdown
 # Page Title
 
 **Last updated:** YYYY-MM-DD
 **Summary:** One sentence describing what this page covers.
-**Related:** [[page-name]], [[page-name]]
+**Related:** [[wiki/category/page]], [[wiki/category/page]]
 
 ---
 
 [body content]
 ```
 
-Pages missing any of these fields should be flagged during Lint.
+Use `[[wiki/category/page]]` format for Logseq bidirectional links so they appear
+correctly in the graph view.
+
+Pages missing any required field should be flagged as a WARNING during Lint.
 
 ---
 
 ## Ingest Rules
 
-When ingesting a new source:
-
 | Source type | Pages to update |
 |---|---|
-| New hardware/device doc | Create or update `hardware/<device>.md`; cross-ref any affected `services/` pages |
-| New service doc | Create or update `services/<service>.md`; update `configs/` if config is included |
-| Config file or snippet | Create or update `configs/<name>.md`; update any `services/` pages that reference it |
-| Troubleshooting notes | Create or update `issues/<name>.md` with status and resolution |
-| General notes | Identify best-fit category; if unclear, place in `wiki/` root with a note for human review |
+| Hardware / device doc | Create or update `wiki/hardware/<device>.md`; cross-ref affected `wiki/services/` pages |
+| Service doc | Create or update `wiki/services/<service>.md`; update `wiki/configs/` if config is included |
+| Config file or snippet | Create or update `wiki/configs/<name>.md`; update `wiki/services/` pages that reference it |
+| Troubleshooting notes | Create or update `wiki/issues/<name>.md` with status and resolution notes |
+| General / uncategorised | Best-fit category; if unclear, create in `wiki/` root and add a `<!-- review needed -->` comment |
 
 After every ingest:
-1. Update `wiki/index.md` with any new pages or changed cross-references
-2. Commit with message format: `wiki: ingest [source filename] → [affected pages]`
+1. Update `wiki/index.md` — add new pages, update cross-reference map
+2. Confirm all new pages have the required frontmatter
 
 ---
 
 ## Lint Rules
 
-Run during the Lint operation. Flag (do not auto-fix unless marked safe):
-
 | Rule | Severity | Auto-fix? |
 |---|---|---|
-| Page not linked from `index.md` | WARNING — orphan page | No — ask human |
+| Page not linked from `wiki/index.md` | WARNING — orphan | No |
 | Page missing required frontmatter fields | WARNING | No |
-| `services/` page missing "last-verified" date | INFO — stale after 30 days | No |
+| `wiki/services/` page has no **Last updated** date | INFO — check if stale | No |
 | Same port number assigned to two different services | ERROR — conflict | No |
-| Contradictory information between two pages | ERROR — conflict | No |
-| Issue page with status OPEN older than 90 days | INFO — stale | No |
+| Contradictory facts between two pages | ERROR — conflict | No |
+| `wiki/issues/` page status OPEN, last updated > 90 days ago | INFO — stale | No |
 
-Lint output format:
+Lint report format:
+
 ```
 LINT REPORT — YYYY-MM-DD
-[ERROR] configs/nginx-ssl.md ↔ services/nginx.md: port conflict (443 vs 8443)
-[WARNING] hardware/old-router.md: orphan — not linked from index.md
-[INFO] services/pihole.md: last-verified 2026-01-01 (>30 days)
-```
-
----
-
-## Commit Convention
-
-All Claude write-backs use this format:
-```
-wiki: [operation] [short description]
-
-Examples:
-wiki: ingest raspberry-pi-hardware.md → hardware/raspberry-pi-4.md, services/
-wiki: lint — 2 warnings, 1 error flagged
-wiki: query filed new page wiki/services/vaultwarden.md
+[ERROR]   wiki/services/nginx.md ↔ wiki/configs/nginx-ssl.md: port conflict (443 vs 8443)
+[WARNING] wiki/hardware/old-device.md: orphan — not linked from index.md
+[INFO]    wiki/services/pihole.md: last updated 2026-01-01, may be stale (>30 days)
 ```

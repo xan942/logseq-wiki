@@ -1,0 +1,16 @@
+{:meta/version 1
+
+ ;; Use markdown instead of org-mode for all pages
+ :preferred-format :markdown
+
+ ;; Point Logseq's pages at wiki/ so Claude's output appears directly in the graph
+ :pages-directory "wiki"
+
+ ;; Keep daily journals in their own directory (Logseq creates these automatically)
+ :journals-directory "journals"
+
+ ;; Show the journal on startup
+ :feature/enable-journals? true
+
+ ;; Disable empty bullet points for cleaner Claude-generated pages
+ :ui/show-empty-bullets? false}

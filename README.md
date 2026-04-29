@@ -1,82 +1,81 @@
-# LLM Wiki — Claude Code Memory Pattern
+# logseq-wiki
 
-A personal knowledge base where Claude Code acts as the **maintainer**, not just a reader.
+A self-hosted, private knowledge base where Claude Code maintains the content and Logseq
+provides the human interface — no cloud services, no data leaving your network.
 
 Inspired by [Andrej Karpathy's LLM Wiki pattern](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f).
 
 ---
 
-## The Problem with Most AI Memory Setups
+## Architecture
 
-Most approaches treat AI memory as a static context dump — you paste in notes, Claude reads them,
-nothing persists. Knowledge has to be re-derived every session. The maintenance burden grows faster
-than the value, so wikis get abandoned.
+```
+You curate sources
+       ↓
+Claude Code — reads sources, writes wiki/ pages directly to disk
+       ↓
+~/Nextcloud/logseq-wiki/wiki/   ← local filesystem (stays on your device)
+       ↓
+Nextcloud desktop client — syncs to your self-hosted Nextcloud server
+       ↓
+All your devices — same wiki available everywhere via Nextcloud
+       ↓
+Logseq — visual interface for reading and editing the wiki on any device
+```
+
+**Nothing leaves your network.** Claude writes files locally. Nextcloud syncs them to your
+own server. Logseq reads them on any device.
+
+Optional: nightly Git push to a **private** GitHub repo for off-site backup (see `setup/github-backup.md`).
+
+---
 
 ## The LLM Wiki Pattern
 
-Instead of retrieving raw documents at query time, the LLM **incrementally builds and maintains**
-a structured, interlinked wiki. Knowledge compounds over time. When you add a source, Claude
-integrates it into existing pages, updates cross-references, and flags contradictions.
+Instead of pasting context into every Claude session, the wiki compounds over time.
+Claude actively maintains it — it doesn't just read from it.
 
 ### Three Layers
 
 | Layer | What it is | Who maintains it |
 |---|---|---|
-| **Raw sources** | Immutable original docs you curate | You |
-| **Wiki** | Structured markdown pages, interlinked | Claude |
-| **Schema** | Config defining structure and rules | You (initially), Claude (on lint) |
+| **Raw sources** | Immutable docs you curate in `sources/` | You |
+| **Wiki** | Structured markdown pages in `wiki/` | Claude |
+| **Schema** | Structure and rules defined in `schema.md` | You (initially) |
 
 ### Three Operations
 
 | Operation | Trigger | What Claude does |
 |---|---|---|
-| **Ingest** | You add a source file to `sources/` | Updates relevant wiki pages, updates cross-refs, commits back |
-| **Query** | You ask a question | Reads wiki, answers, optionally files a new page |
-| **Lint** | Periodic or on-demand | Flags contradictions, orphans, stale entries |
-
-**The key difference from RAG or a context dump: Claude writes back to the wiki.** It doesn't just read.
+| **Ingest** | `Ingest sources/<file>` | Updates relevant wiki pages, updates index |
+| **Query** | Any question | Reads wiki, answers, optionally files new pages |
+| **Lint** | `Lint` | Flags contradictions, orphans, stale entries |
 
 ---
 
-## Quickstart (15 minutes)
+## Quickstart
 
-### 1. Clone and set vault path
-
-```bash
-git clone https://github.com/xan942/logseq-claude-memory ~/logseq-wiki
-cd ~/logseq-wiki
-```
-
-Edit `CLAUDE.md` — replace the vault path with your actual path:
-```markdown
-Wiki:    ~/logseq-wiki/wiki/
-Schema:  ~/logseq-wiki/schema.md
-Sources: ~/logseq-wiki/sources/
-```
-
-### 2. Configure MCP write-back
+### 1. Clone into your Nextcloud folder
 
 ```bash
-cp setup/mcp-settings.json ~/.claude/settings.json
+# Clone directly into your Nextcloud sync directory so Nextcloud picks it up immediately
+git clone https://github.com/xan942/logseq-wiki ~/Nextcloud/logseq-wiki
+cd ~/Nextcloud/logseq-wiki
 ```
 
-Store your GitHub token securely (not in `~/.bashrc`):
-```bash
-mkdir -p ~/.config/claude
-echo 'export GITHUB_TOKEN="ghp_your_token_here"' > ~/.config/claude/secrets
-chmod 600 ~/.config/claude/secrets
-echo 'source ~/.config/claude/secrets' >> ~/.profile
-source ~/.profile
-```
+### 2. Open as a Logseq vault
 
-Edit `~/.claude/settings.json` and replace `<your-github-personal-access-token>` with your token.
+In Logseq: **Add a graph** → point it at `~/Nextcloud/logseq-wiki/`
+
+Logseq reads from `wiki/` (configured in `logseq/config.edn`) and the wiki pages appear
+in the graph view. You can browse, edit, and add `[[links]]` like any Logseq vault.
 
 ### 3. First ingest
 
-Open Claude Code in the wiki directory:
+Open Claude Code in the vault directory:
 
 ```bash
-cd ~/logseq-wiki
+cd ~/Nextcloud/logseq-wiki
 claude
 ```
 
@@ -85,37 +84,39 @@ Then type:
 Ingest sources/getting-started.md
 ```
 
-Claude reads `schema.md`, creates or updates relevant `wiki/` pages, and commits back via GitHub MCP.
-
-### 4. Cross-device sync
-
-See `setup/nextcloud-sync.md` if you run Nextcloud (recommended). Otherwise see `guide.md`.
+Claude reads `schema.md`, writes new pages into `wiki/`, and updates `wiki/index.md`.
+Nextcloud syncs the changes to your other devices automatically.
 
 ---
 
 ## Repository Structure
 
 ```
-logseq-claude-memory/
-├── README.md               # This file
-├── schema.md               # Wiki structure, ingest rules, lint rules — edit this first
-├── CLAUDE.md               # Claude's operating instructions — set your vault paths here
-├── guide.md                # Full setup and usage guide
+logseq-wiki/
+├── README.md                  # This file
+├── schema.md                  # Wiki structure, ingest rules, lint rules
+├── CLAUDE.md                  # Claude's operating instructions
+├── logseq/
+│   └── config.edn             # Logseq vault configuration
 ├── setup/
-│   ├── mcp-settings.json   # Ready-to-use .claude/settings.json with GitHub MCP
-│   └── nextcloud-sync.md   # Cross-device sync via Nextcloud (recommended)
-├── sources/                # Raw source documents — immutable, you curate these
-└── wiki/                   # LLM-maintained markdown — Claude writes here
-    └── index.md            # Auto-maintained table of contents
+│   ├── nextcloud-sync.md      # Nextcloud setup and conflict handling
+│   └── github-backup.md       # Optional: private repo off-site backup
+├── sources/                   # Raw source docs — immutable, you curate these
+│   └── getting-started.md     # Example source to test your first Ingest
+└── wiki/                      # LLM-maintained pages — Claude writes here
+    └── index.md               # Auto-maintained table of contents
 ```
 
 ---
 
-## Why This Works
+## Privacy Model
 
-Humans abandon wikis because maintenance is tedious. LLMs excel at that tedium —
-updating references, maintaining consistency, synthesizing across pages. You focus on
-curation and asking meaningful questions. Claude handles the bookkeeping.
+| Data | Where it lives |
+|---|---|
+| Wiki pages | Local disk + your Nextcloud server |
+| Source documents | Local disk + your Nextcloud server |
+| Schema and config | Local disk + your Nextcloud server |
+| Claude conversations | Local only (Claude Code runs locally) |
+| Optional backup | Private GitHub repo (your account, opt-in) |
 
-This echoes Vannevar Bush's 1945 Memex: a personal, curated knowledge store where
-the connections between items matter as much as the items themselves.
+No telemetry, no third-party sync services, no API keys required to run the wiki.

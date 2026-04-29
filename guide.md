@@ -1,6 +1,7 @@
 # Setup and Usage Guide
 
-Full walkthrough for getting the LLM Wiki running with Claude Code write-back.
+Complete walkthrough for the Logseq + Nextcloud + Claude Code stack.
+Everything runs on your own hardware — no cloud services required.
 
 ---
 
@@ -8,223 +9,188 @@ Full walkthrough for getting the LLM Wiki running with Claude Code write-back.
 
 | Tool | What it is | Install |
 |---|---|---|
-| **Claude Code CLI** | Anthropic's terminal AI agent — runs Claude in your shell | `npm install -g @anthropic/claude-code` |
-| **Node.js + npx** | JavaScript runtime; `npx` runs npm packages without installing them globally | https://nodejs.org |
-| **Git** | Version control — tracks all wiki changes and syncs to GitHub | Pre-installed on most Linux/macOS |
-| **GitHub account** | Hosts the repo; Claude writes back here via MCP | https://github.com |
-| **GitHub personal access token** | Lets the MCP server authenticate to GitHub on Claude's behalf | GitHub → Settings → Developer settings → Personal access tokens → Fine-grained — needs `repo` scope |
+| **Claude Code CLI** | Anthropic's terminal AI agent — runs locally, writes files to disk | `npm install -g @anthropic/claude-code` |
+| **Node.js** | JavaScript runtime required by Claude Code | https://nodejs.org |
+| **Logseq** | Local-first note-taking app — reads and displays your wiki markdown files | https://logseq.com/downloads |
+| **Nextcloud desktop client** | Syncs your Nextcloud folder between devices and your self-hosted server | https://nextcloud.com/install/#install-clients |
+| **Git** | Version control — used for cloning this template and optional backup | Pre-installed on most Linux/macOS |
 
 ---
 
-## Step 1 — Clone and Configure Paths
+## Step 1 — Clone into your Nextcloud folder
+
+Clone directly into your Nextcloud sync directory. The Nextcloud client watches this
+folder, so anything written here — by you, Logseq, or Claude — syncs to your server
+and to all other devices automatically.
 
 ```bash
-# Clone your fork of this repo to ~/logseq-wiki (or any path you prefer)
-git clone https://github.com/xan942/logseq-claude-memory ~/logseq-wiki
-cd ~/logseq-wiki
+# Replace ~/Nextcloud with your actual Nextcloud sync folder path
+# Common paths: ~/Nextcloud, ~/nextcloud, ~/NextCloud
+git clone https://github.com/xan942/logseq-wiki ~/Nextcloud/logseq-wiki
+cd ~/Nextcloud/logseq-wiki
 ```
 
-Edit `CLAUDE.md` — the three vault paths at the top tell Claude where to read and write:
+Update the vault paths in `CLAUDE.md` to match your path:
 
-```markdown
-Wiki:    ~/logseq-wiki/wiki/
-Schema:  ~/logseq-wiki/schema.md
-Sources: ~/logseq-wiki/sources/
 ```
-
-Replace `~/logseq-wiki` with your actual clone path if different. Everything else in `CLAUDE.md`
-is Claude's operating instructions — leave it unless you want to change behavior.
+Vault:   ~/Nextcloud/logseq-wiki/
+Wiki:    ~/Nextcloud/logseq-wiki/wiki/
+Schema:  ~/Nextcloud/logseq-wiki/schema.md
+Sources: ~/Nextcloud/logseq-wiki/sources/
+```
 
 ---
 
-## Step 2 — Configure MCP Write-back
+## Step 2 — Open as a Logseq vault
 
-**What MCP is:** Model Context Protocol — a standard for giving Claude Code access to external
-tools. The GitHub MCP server (`@modelcontextprotocol/server-github`) adds GitHub read/write
-tools to Claude's toolkit, so it can commit files directly to your repo.
+**What this does:** Logseq reads all markdown files in the vault directory and builds a
+graph of pages and their connections. The `logseq/config.edn` file (already in this repo)
+tells Logseq to use `wiki/` as its pages directory and prefer markdown format.
 
-**Why this matters:** Without it, Claude can read the wiki but nothing it writes persists.
-MCP write-back is what makes this an LLM Wiki instead of a context dump.
+1. Open Logseq
+2. Click **Add a graph** (or **Open a local directory**)
+3. Navigate to `~/Nextcloud/logseq-wiki/` and select it
+4. Logseq opens the vault — `wiki/index.md` appears as the Index page
 
-```bash
-# Copy the pre-configured MCP settings into Claude Code's user config directory
-# ~/.claude/settings.json is where Claude Code looks for MCP server definitions
-cp setup/mcp-settings.json ~/.claude/settings.json
-```
-
-Store your GitHub token securely — **not in `~/.bashrc`** (visible in shell history):
-
-```bash
-# ~/.config/claude/secrets is sourced at login but not stored in history
-mkdir -p ~/.config/claude
-echo 'export GITHUB_TOKEN="ghp_your_token_here"' > ~/.config/claude/secrets
-chmod 600 ~/.config/claude/secrets              # only your user can read it
-
-# Source it at login — add to ~/.profile (runs on login shells, not just interactive ones)
-echo 'source ~/.config/claude/secrets' >> ~/.profile
-source ~/.profile                               # apply immediately without re-logging in
-```
-
-Edit `~/.claude/settings.json` and replace `<your-github-personal-access-token>` with the
-literal token string (starts with `ghp_`). Do not use the env var name — paste the token value.
-
-Verify MCP is wired up:
-
-```bash
-cd ~/logseq-wiki
-claude          # opens Claude Code in this directory
-```
-
-Inside Claude Code, type:
-```
-/mcp
-```
-You should see `github` listed as a connected server with a green status indicator.
+You can now browse and edit wiki pages in Logseq normally. Pages Claude creates in `wiki/`
+appear in the graph automatically.
 
 ---
 
-## Step 3 — Customize the Schema
+## Step 3 — Set up Nextcloud sync (if not already running)
 
-Open `schema.md`. This is the config document that defines:
-- **Wiki structure** — what folders exist and what each one holds
-- **Ingest rules** — which pages to update when a given type of source comes in
-- **Lint rules** — what counts as an error, warning, or stale entry
-- **Page format** — required frontmatter fields every page must have
-- **Commit convention** — how Claude labels its commits
+If your Nextcloud server is already running and the desktop client is installed, skip this.
+If not, see `setup/nextcloud-sync.md` for the full setup guide.
 
-The default schema uses four categories (`hardware/`, `services/`, `configs/`, `issues/`) suited
-for a homelab/self-hosted setup. Rename them to match your use case — software projects, research
-notes, a personal knowledge base. **The schema is the only file you need to edit to change how
-Claude organizes knowledge.**
+**Quick check:** If you cloned into `~/Nextcloud/logseq-wiki/` and you can see the files
+in your Nextcloud web UI at `nextcloud.naspi.local`, sync is working.
 
 ---
 
-## Step 4 — First Ingest
+## Step 4 — Customize the schema
 
-`sources/` holds the raw input documents you curate. These are immutable — once added, never
-edit them. If a source changes, add a new file and ingest again. This preserves the audit trail
-of what Claude learned and when.
+Open `schema.md` and adapt it to your use case before your first ingest.
 
-```bash
-# Drop any document into sources/ — a README, config file, notes, troubleshooting log
-cp ~/my-notes/naspi-hardware.md sources/naspi-hardware.md
+The default categories (`hardware/`, `services/`, `configs/`, `issues/`) suit a homelab
+setup. If you want different categories — software projects, research topics, personal
+knowledge — rename them here. The schema is the single lever that controls how Claude
+organizes everything.
 
-# Commit the source to the repo before ingesting
-# (so the GitHub history shows when the source was added)
-git add sources/naspi-hardware.md
-git commit -m "sources: add naspi hardware notes"
-git push
-```
+---
 
-Open Claude Code and run the Ingest operation:
+## Step 5 — First ingest
+
+`sources/` holds your raw input documents. These are the inputs you curate — config files,
+notes, READMEs, troubleshooting logs. Once added, they are **never edited** (add new files
+for updated information instead). This keeps a clean audit trail of what Claude learned and when.
 
 ```bash
-cd ~/logseq-wiki
-claude
+cd ~/Nextcloud/logseq-wiki
+claude   # opens Claude Code with CLAUDE.md loaded automatically
 ```
 
+Type in Claude Code:
 ```
-Ingest sources/naspi-hardware.md
+Ingest sources/getting-started.md
 ```
 
 Claude will:
-1. Read `schema.md` — loads wiki structure and ingest rules
-2. Read `sources/naspi-hardware.md` — the raw source
-3. Identify which `wiki/` pages are affected based on the schema ingest rules
-4. Create or update those pages, preserving existing accurate content
-5. Update `wiki/index.md` with new pages and cross-references
-6. Commit all changes to GitHub via the GitHub MCP server
+1. Read `schema.md` — understand the wiki structure and ingest rules
+2. Read the source file
+3. Create wiki pages in the appropriate `wiki/` subdirectories
+4. Update `wiki/index.md` with new pages and cross-references
+5. Write all files directly to disk
+
+Logseq will reflect the new pages on next sync or manual refresh (`Ctrl+Shift+R` in Logseq).
 
 ---
 
-## Step 5 — Querying
+## Step 6 — Querying
 
-Once the wiki has content, ask questions in natural language:
+With content in the wiki, ask questions in natural language inside Claude Code:
 
 ```
-What services are running on the NASPi?
-What port does Nextcloud use?
-Is there an open issue with SSL certificates?
+What services are running and what ports do they use?
+Is there an open issue with the SSL certificates?
+What is the hardware spec for the NASPi?
 ```
 
-Claude reads `wiki/index.md` first (the table of contents) to identify which pages are relevant,
-then reads those pages to answer. If answering reveals information not yet captured in the wiki
-(a new fact, a resolved ambiguity, a useful synthesis), Claude files a new page and commits it —
-the wiki grows from queries as well as ingests.
+Claude reads `wiki/index.md` first to find relevant pages, then reads those pages to answer.
+If the answer surfaces something worth keeping — a fact not yet recorded, a useful synthesis —
+Claude writes a new or updated page to the wiki automatically.
 
 ---
 
-## Step 6 — Lint
+## Step 7 — Lint
 
-Lint is a health check for the wiki. Run it periodically to catch drift before it compounds:
+Run periodically to keep the wiki healthy:
 
 ```
 Lint
 ```
 
-**What Claude checks** (defined in `schema.md` lint rules):
-- Orphaned pages — exist in `wiki/` but not linked from `index.md`
-- Missing frontmatter — pages without required `Last updated`, `Summary`, or `Related` fields
-- Stale service pages — `services/` pages not verified in more than 30 days
-- Port conflicts — same port number appearing in two different service pages
-- Contradictions — factual conflicts between pages
+Claude scans all pages in `wiki/` against the rules in `schema.md` and writes a report to
+`wiki/lint-YYYY-MM-DD.md`. It flags:
+- Orphaned pages (exist in `wiki/` but not linked from `index.md`)
+- Pages missing required frontmatter fields
+- Port conflicts between service pages
+- Contradictions between pages
+- Stale entries (services not verified in >30 days, open issues >90 days old)
 
-Claude outputs a structured report and commits it as `wiki/lint-YYYY-MM-DD.md`. It does **not**
-auto-fix errors or conflicts — those require human judgment. The committed reports give you a
-history of wiki health over time.
+Claude does **not** auto-fix errors or conflicts — those require your judgment.
 
 ---
 
-## Step 7 — Cross-Device Sync
+## Step 8 — Optional: private GitHub backup
 
-See `setup/nextcloud-sync.md` for the full walkthrough.
-
-**Short version (Nextcloud — recommended if you're already running it):**
-1. Move `~/logseq-wiki` into your Nextcloud folder (e.g., `~/nextcloud/logseq-wiki`)
-2. Update the three vault paths in `CLAUDE.md`
-3. Install the Nextcloud desktop client on each device — the wiki syncs automatically
-4. Claude's write-backs go to GitHub via MCP (version history); Nextcloud handles device propagation
-
-**Short version (Git-only):**
-Use the `systemd` user service in `setup/nextcloud-sync.md` — it watches `wiki/` with
-`inotifywait` (part of `inotify-tools`) and auto-commits + pushes on every file save.
+The wiki lives on your Nextcloud server. If you want an off-site backup to a private
+GitHub repo, see `setup/github-backup.md`. This is entirely optional and adds no
+dependencies to the daily workflow.
 
 ---
 
 ## Troubleshooting
 
-**Claude says it can't find the wiki**
-The paths in `CLAUDE.md` must be exact. Run `ls ~/logseq-wiki/wiki/` to confirm the directory
-exists. Tilde expansion works; relative paths do not.
+**Logseq doesn't show Claude's new pages**
+Press `Ctrl+Shift+R` in Logseq to re-index the vault. If pages still don't appear,
+check that the files were actually written: `ls ~/Nextcloud/logseq-wiki/wiki/`.
 
-**`/mcp` shows GitHub as disconnected**
-Verify `~/.claude/settings.json` is valid JSON (`jq . ~/.claude/settings.json` will tell you).
-Then verify the token is in your environment: `echo $GITHUB_TOKEN` should print the token, not
-an empty line. If empty, `source ~/.config/claude/secrets` and try again.
+**Logseq links show as unresolved**
+Claude uses `[[wiki/category/page]]` link format. Logseq resolves these as namespaced
+pages. If a link appears broken, check that the target file exists at the expected path.
 
-**Merge conflicts after sync**
-Git-only sync: run `git pull --rebase origin main` before starting any session on a new device.
-`--rebase` replays your local commits on top of remote changes instead of creating a merge commit,
-keeping history linear. Nextcloud sync: look for `(conflicted copy)` files in `wiki/` and resolve
-manually — compare, merge content, delete the conflicted copy.
+**Nextcloud is not syncing changes**
+Check the Nextcloud desktop client — it should show a green checkmark. If it shows
+errors, check your server connection (`nextcloud.naspi.local` reachable?) and that
+the client is watching the correct folder.
 
-**Claude is modifying `sources/` or `schema.md`**
-Re-state the constraint in your prompt: *"Do not modify files outside wiki/ unless I explicitly
-ask."* The `CLAUDE.md` instructions say this, but an explicit prompt always takes precedence.
+**Claude can't find the wiki**
+Verify the paths in `CLAUDE.md` exactly match your filesystem. Run
+`ls ~/Nextcloud/logseq-wiki/wiki/` to confirm the directory exists. Tilde (`~`)
+expansion works; relative paths do not.
+
+**Two devices edited the same page simultaneously**
+Nextcloud creates a `(conflicted copy YYYY-MM-DD)` file rather than overwriting. The
+cron job in `setup/nextcloud-sync.md` alerts you when this happens. Open both files,
+merge the content manually, delete the conflicted copy.
 
 ---
 
 ## Tips
 
-- **Sources are immutable.** If a source document changes (e.g., you updated a config), add
-  a new file (`sources/nginx-config-v2.md`) and ingest it. Don't overwrite the original — the
-  old version tells the story of what Claude knew at each point in time.
+- **Schema first.** Before your first real ingest, spend 10 minutes in `schema.md` making
+  sure the categories and ingest rules match your actual use case. Changing the schema
+  later is fine but requires re-organizing existing wiki pages.
 
-- **Schema is the lever.** If Claude organizes things differently than you'd like, edit `schema.md`
-  rather than individual wiki pages. The schema is Claude's operating instructions for the entire
-  wiki structure — changing it affects all future ingests.
+- **Sources are the audit trail.** Every file in `sources/` represents a point in time.
+  Claude's wiki pages are derived from these. If you wonder "where did Claude learn X?"
+  the source file is the answer.
 
-- **Lint after every 5–10 ingests.** Catches orphaned pages and stale entries before they pile up.
+- **Lint after every 5–10 ingests.** Orphaned pages and stale entries compound quickly.
 
-- **Queries surface gaps.** Questions Claude can't answer from the wiki reveal what's missing.
-  Those gaps become your ingest backlog — add source documents that fill them.
+- **Use Logseq for human edits.** You can edit wiki pages directly in Logseq. Claude
+  will respect existing content during future ingests (it preserves accurate content).
+  Just keep the frontmatter format intact.
+
+- **Queries grow the wiki.** Every time Claude can't fully answer a question from existing
+  wiki pages, that's a signal to add a source. The question backlog is your ingest backlog.

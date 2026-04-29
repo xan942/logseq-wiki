@@ -1,13 +1,14 @@
-# LLM Wiki — Claude Operating Instructions
+# logseq-wiki — Claude Operating Instructions
 
 ## Vault Paths
 
-> Edit these to match your actual paths before first use.
+> Edit these to match your actual Nextcloud sync path before first use.
 
 ```
-Wiki:    ~/logseq-wiki/wiki/
-Schema:  ~/logseq-wiki/schema.md
-Sources: ~/logseq-wiki/sources/
+Vault:   ~/Nextcloud/logseq-wiki/
+Wiki:    ~/Nextcloud/logseq-wiki/wiki/
+Schema:  ~/Nextcloud/logseq-wiki/schema.md
+Sources: ~/Nextcloud/logseq-wiki/sources/
 ```
 
 ---
@@ -16,49 +17,54 @@ Sources: ~/logseq-wiki/sources/
 
 ### Ingest
 
-Triggered by: `Ingest <source-file>`
+Triggered by: `Ingest <source-file>` or `Ingest sources/<file>`
 
-1. Read `schema.md` — understand wiki structure and ingest rules
+1. Read `schema.md` — load wiki structure and ingest rules
 2. Read the source file
 3. Identify which `wiki/` pages are affected (per schema ingest rules)
-4. For each affected page: read the existing page (if it exists), then update with new information
-   - Preserve existing accurate content
-   - Integrate new information into the appropriate sections
-   - Add or update the `Related:` field for cross-references
-5. Update `wiki/index.md` — add new pages, update changed cross-refs
-6. Commit all changed files via GitHub MCP using the schema commit convention
+4. For each affected page:
+   - If the page exists: read it, then update with new information, preserving accurate content
+   - If the page does not exist: create it using the page format defined in `schema.md`
+   - Update the `Related:` field with relevant cross-references
+5. Update `wiki/index.md` — add new pages, update cross-reference map
+6. Write all changed files directly to disk
 
 ### Query
 
 Triggered by: any question about the knowledge base
 
 1. Read `wiki/index.md` to identify relevant pages
-2. Read the relevant pages
+2. Read those pages
 3. Answer the question
-4. If the answer reveals information worth persisting (a new fact, a resolved ambiguity,
-   a synthesis not yet in the wiki), file a new page or update an existing one, then commit
+4. If the answer reveals something worth persisting (new fact, resolved ambiguity, useful
+   synthesis not yet captured), write it as a new or updated wiki page
 
 ### Lint
 
 Triggered by: `Lint` or `Run lint`
 
 1. Read `schema.md` — load lint rules
-2. Read all files in `wiki/` recursively
+2. Read all files under `wiki/` recursively
 3. Check each lint rule against each page
-4. Output a lint report (format defined in schema.md)
+4. Output a lint report using the format defined in `schema.md`
 5. Do NOT auto-fix errors or conflicts — flag them for human review
-6. Commit the lint report as `wiki/lint-YYYY-MM-DD.md`
+6. Write the report to `wiki/lint-YYYY-MM-DD.md`
 
 ---
 
 ## Write-back
 
-Use the GitHub MCP server to commit updates directly to the repository.
+Write files directly to the local filesystem using your built-in file tools.
+No external APIs, services, or network calls are needed or expected.
 
-- Repository: `xan942/logseq-claude-memory`
-- Branch: `main`
-- Commit message format: see `schema.md` — Commit Convention section
+Nextcloud syncs the vault to all devices automatically after files are written.
+Logseq reflects changes the next time it syncs or the vault is refreshed.
 
-Do not modify files outside `wiki/` unless explicitly asked.
-Do not modify `schema.md` or `CLAUDE.md` unless explicitly asked.
-Raw sources in `sources/` are immutable — never modify them.
+---
+
+## Boundaries
+
+- Only modify files inside `wiki/` unless explicitly asked to do otherwise
+- Never modify `schema.md`, `CLAUDE.md`, or `logseq/config.edn` unless explicitly asked
+- Files in `sources/` are immutable — never edit them; ingest them, don't modify them
+- Do not create files outside the vault path defined above

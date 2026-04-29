@@ -1,137 +1,78 @@
-# Cross-Device Sync via Nextcloud
+# Nextcloud Sync Setup
 
-Nextcloud is the recommended sync method because it handles file propagation, conflict detection,
-and versioning without requiring manual git operations on every device.
+Nextcloud is the sync layer for this wiki. It propagates file changes between your devices
+and your self-hosted Nextcloud server without any manual git operations.
 
-**What Nextcloud is:** A self-hosted file sync and share platform — think a private Dropbox you
-control. The desktop client watches a local folder and syncs changes to the server automatically.
-If you're running it on NASPi, your server is already at `nextcloud.naspi.local`.
+**What Nextcloud is:** A self-hosted file sync platform — like Dropbox but running on your
+own hardware. The desktop client watches a local folder and syncs changes to the server in
+real time. Logseq and Claude Code interact only with the local folder; they never talk to
+Nextcloud directly.
 
 ---
 
-## Setup (Nextcloud already running)
+## If Nextcloud is Already Running (NASPi setup)
 
-### 1. Move the vault into Nextcloud
+Your Nextcloud server is at `nextcloud.naspi.local`. Install the desktop client on each
+device and point it at your server.
+
+### Install the desktop client
 
 ```bash
-# Move the wiki repo into your Nextcloud sync folder
-# The Nextcloud client watches this folder and syncs all changes automatically
-mv ~/logseq-wiki ~/nextcloud/logseq-wiki    # adjust to your actual Nextcloud folder path
+# Ubuntu / Debian
+sudo apt install nextcloud-desktop
 
-# Verify Git remote is still intact after the move
-cd ~/nextcloud/logseq-wiki
-git remote -v    # should still show origin → github.com/xan942/logseq-claude-memory
+# Or download the AppImage from https://nextcloud.com/install/#install-clients
 ```
 
-### 2. Update CLAUDE.md paths
+### Connect to your server
 
-Edit `CLAUDE.md` to reflect the new location:
+1. Open the Nextcloud desktop client
+2. Click **Log in** → enter `https://nextcloud.naspi.local`
+3. Authenticate with your Nextcloud credentials
+4. Choose which folders to sync — include `logseq-wiki/`
 
-```markdown
-Wiki:    ~/nextcloud/logseq-wiki/wiki/
-Schema:  ~/nextcloud/logseq-wiki/schema.md
-Sources: ~/nextcloud/logseq-wiki/sources/
-```
-
-### 3. Install Nextcloud client on each device
-
-Download the Nextcloud desktop client for your OS from https://nextcloud.com/install/#install-clients.
-Point it at your NASPi Nextcloud server (`https://nextcloud.naspi.local`) and sync the
-`logseq-wiki/` folder. The wiki will be available locally at `~/nextcloud/logseq-wiki/` on
-every device — same path, same content.
-
-### 4. Update CLAUDE.md on each device
-
-Each device needs `CLAUDE.md` pointing at its local sync path. If all devices use the same
-home directory structure (`~/nextcloud/logseq-wiki/`), no changes are needed — the paths are
-already correct.
+The `~/Nextcloud/logseq-wiki/` folder now mirrors your server. Any file written here by
+Claude Code or Logseq syncs automatically.
 
 ---
 
 ## Conflict Handling
 
-Nextcloud detects write conflicts and creates `filename (conflicted copy YYYY-MM-DD).md` files
-rather than silently overwriting — safer than Git's merge conflicts but still requires manual
-resolution. Add a cron job to alert when conflicts appear:
+Nextcloud detects write conflicts and creates a `filename (conflicted copy YYYY-MM-DD).md`
+file rather than silently overwriting. This is safer than a silent merge but requires
+manual resolution.
+
+Add a cron job to alert when conflict files appear in the wiki:
 
 ```bash
-# crontab -e — checks for Nextcloud conflict files every 15 minutes
-# notify-send sends a desktop notification (requires a notification daemon like mako on Wayland)
-*/15 * * * * find ~/nextcloud/logseq-wiki/wiki/ -name "*conflicted copy*" | grep -q . && \
-    notify-send "Wiki conflict" "Resolve conflict files in ~/nextcloud/logseq-wiki/wiki/"
+# crontab -e
+# Checks every 15 minutes — notify-send sends a desktop notification via mako (Wayland)
+*/15 * * * * find ~/Nextcloud/logseq-wiki/wiki/ -name "*conflicted copy*" 2>/dev/null | \
+    grep -q . && notify-send "logseq-wiki conflict" \
+    "Resolve conflict files in ~/Nextcloud/logseq-wiki/wiki/"
 ```
 
-To resolve: compare the conflicted copy with the original, merge the content into one file,
-delete the conflicted copy.
+To resolve a conflict:
+1. Open both files — the original and the `(conflicted copy)` version
+2. Compare and manually merge the content you want to keep
+3. Save the original with the merged content
+4. Delete the conflicted copy
 
 ---
 
-## How Git and Nextcloud Divide Responsibilities
+## Adding a New Device
 
-With Nextcloud handling device sync, the two systems have distinct roles:
-
-| System | Role |
-|---|---|
-| **Nextcloud** | Device propagation — file changes on one device appear on all others within seconds |
-| **Git / GitHub** | Version history and audit trail — all of Claude's write-backs are committed here via MCP |
-
-You do not need to run `git push` manually on each device. Claude's MCP write-backs go directly
-to GitHub. Nextcloud then propagates those file changes to your other devices.
+1. Install Nextcloud desktop client on the new device
+2. Connect to `https://nextcloud.naspi.local`
+3. Sync the `logseq-wiki/` folder
+4. Clone or the folder already has the files — open it in Logseq as a graph
+5. Open Claude Code in `~/Nextcloud/logseq-wiki/` — `CLAUDE.md` is already there
 
 ---
 
-## Alternative: Git-only (no Nextcloud)
+## Privacy Notes
 
-If you don't have Nextcloud, use a `systemd` user service with `inotifywait` to auto-commit
-and push whenever a wiki file changes.
-
-**`inotifywait`** is part of `inotify-tools` — a Linux utility that watches filesystem events
-in real time. When a file is closed after writing (`close_write` event), the service triggers
-a git commit and push.
-
-```bash
-# Install inotify-tools if not present
-sudo apt install inotify-tools
-```
-
-Create the service file:
-
-```bash
-# ~/.config/systemd/user/wiki-sync.service
-# systemd user services run as your user (no root needed) and start at login
-```
-
-```ini
-[Unit]
-Description=Wiki auto-sync on file change
-
-[Service]
-Type=simple
-ExecStart=/bin/bash -c '
-  inotifywait -m -r -e close_write ~/logseq-wiki/wiki/ --format "%%w%%f" |
-  while read file; do
-    cd ~/logseq-wiki
-    git pull --rebase origin main 2>/dev/null    # pull first to reduce conflicts
-    git add wiki/
-    git commit -m "wiki: auto-sync $(date +%%Y-%%m-%%d\ %%H:%%M)" 2>/dev/null
-    git push origin main 2>/dev/null
-  done
-'
-Restart=on-failure
-
-[Install]
-WantedBy=default.target
-```
-
-```bash
-# Enable and start the service — it will also restart automatically on login
-systemctl --user enable --now wiki-sync.service
-
-# Check it's running
-systemctl --user status wiki-sync.service
-```
-
-**Limitation:** If two devices edit the same file within a few seconds of each other, Git will
-produce a merge conflict on the next pull. Run `git pull --rebase origin main` before starting
-a session on any device to minimize this. The `--rebase` flag replays your local commits on top
-of remote changes, keeping history linear and conflicts rare.
+- All wiki data stays on devices you control (local disk + your Nextcloud server)
+- The Nextcloud server is `nextcloud.naspi.local` — on your LAN, not a public server
+- SSL is handled by your step-ca internal CA (certificates at `/etc/ssl/step/`)
+- No wiki content leaves your network unless you explicitly set up the optional GitHub backup

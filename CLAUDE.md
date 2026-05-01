@@ -2,13 +2,11 @@
 
 ## Vault Paths
 
-> Edit these to match your actual Nextcloud sync path before first use.
-
 ```
-Vault:   ~/Nextcloud/logseq-wiki/
-Wiki:    ~/Nextcloud/logseq-wiki/wiki/
-Schema:  ~/Nextcloud/logseq-wiki/schema.md
-Sources: ~/Nextcloud/logseq-wiki/sources/
+Vault:   /mnt/data/nextcloud/naspi/files/logseq-wiki/
+Wiki:    /mnt/data/nextcloud/naspi/files/logseq-wiki/wiki/
+Schema:  /mnt/data/nextcloud/naspi/files/logseq-wiki/schema.md
+Sources: /mnt/data/nextcloud/naspi/files/logseq-wiki/sources/
 ```
 
 ---
